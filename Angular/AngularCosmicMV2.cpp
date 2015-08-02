@@ -1,0 +1,928 @@
+#ifndef pi
+#define pi 3.141592653589793
+#endif
+
+#include <cmath>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <algorithm>
+#include <sstream>
+#include <time.h>
+#include <string>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include "perfuncs.h"
+
+/*
+ 
+ Compile with:
+ g++-4.9 -o ACMV7 AngularCosmicMV2.cpp `gsl-config --cflags --libs` -O3
+ 
+ Use:
+ GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
+ To set seed and type
+ For tcsh syntax: setenv GSL_RNG_SEED "10"
+ 
+ */
+ 
+using namespace std;
+
+int s;
+double k, fmnk, alpha, A, A2, cosalpha, sinalpha, kA;
+double cosKA, sinKA, kA2;
+double c1,c2;
+double Gnm, argument;
+double integral;
+double OmegaMp;
+double sigma2_star;
+double sum;
+//--------------- PARAMETERS -----------------
+double OM=0.3175; // Planck value
+double OL=1.-OM;
+//double h=0.6711;  // Planck value
+double H0 = 100.;    // units:  [h km s^-1 Mpc^-1]  
+double dk=0.01;     // For integration
+double kmaxx = 2.;   // Accurate but slow
+// ------------ FOR IDEAL SURVEY ------------
+int NN=1200;    // Number points in ideal survey
+
+//i.e. random, isotropic set of points with density n(r) \propto exp(-r^2/2R_l^2)
+double ra, decli, z, phi, theta;
+double* xN = new double[NN];
+double* yN = new double[NN];
+double* zN = new double[NN];
+double* rN = new double[NN];
+double factor;
+// Create w_in[3][NN]
+double** w_in = new double*[3];
+
+int pkintsize;
+double* k_arr;
+double* Pk_arr;
+
+double dxx_mpch(double zz, double OM, double OL)
+{
+	double h,OK,ORR,w0,wa,H0,H0y,c_MpcGyr,xx;
+	double redshift,a,ezinv;
+	double dz = 1e-8;
+	
+	h = 1;
+	
+	OK = 1.-OM-OL;
+	
+	H0 = h*100.; // km/s/Mpc
+	H0y = H0 * 1.0225e-3; // Gyr^-1 3.24e-20 * 3.156e16
+	
+	c_MpcGyr = 3e8 / 3.09e22 * 3.1536e16; // [m/s] / [m/Gpc] * [s/Gyr]
+	
+	xx=0;
+	redshift=0;
+	
+	// Do integration
+	while (redshift <= zz){
+		a = 1./(1.+redshift);
+		ezinv = 1./sqrt(OM/(a*a*a) + OK/(a*a) + OL);
+		
+		xx += ezinv*dz;
+		
+		redshift += dz;
+	}
+	
+	xx = xx * c_MpcGyr / H0y;
+	
+	return xx;
+}
+
+double LinearInterpolate(int n, double x[],double y[], double x0)
+{
+	double x1,x2,y1,y2,y0;
+	int check;
+	
+	for (int i=0; i<n; i++) {
+		if (x[i] <= x0 & x[i+1] > x0) {
+			x1 = x[i];
+			x2 = x[i+1];
+			y1 = y[i];
+			y2 = y[i+1];
+			check = 3;
+		}
+	}
+	if (check != 3) {
+		cout << "Could not interpolate" << endl;
+		cout << "    x0 = " << x0 << " , x range: [" << x[0] << " , " << x[n-1] << "]" << endl;
+		cout << "    n = " << n << " , y range: [" << y[0] << " , " << y[n-1] << "]" << flush << endl;
+		exit( -1 );
+	}
+	
+	y0 = y1 + ((y2-y1)/(x2-x1))*(x0-x1);
+	
+	return y0;
+}
+
+double Kroneckerdelta(int i, int j)
+{
+	int answer;
+	if (i == j) answer = 1;
+	else answer = 0;
+	
+	return answer;
+}
+
+void readin_CAMB(char* camb_file, double kmaxx, double dk, int& pkintsize, 
+				 double *& k_arr, double *& Pk_arr)
+{
+	int pksize, nn;
+	double dummy;
+	
+	pksize = 0.;
+	// Read in CAMB power spectrum (1) Find size of file
+	ifstream file(camb_file);
+	if ( !file ) { // opened failed
+		cout << "    cannot open CAMB file for read-in" << flush << endl;
+		exit( -1 );
+	}
+    while(file >> dummy >> dummy){
+		pksize++;
+	}
+	file.close();
+	
+	double k0, Pk0;
+	double lnk[pksize], lnPk[pksize];
+	double kmax = 0., kmin=1000000.;
+	
+	nn=0;
+	ifstream file2(camb_file);
+    while(file2 >> k0 >> Pk0){   // k0: h Mpc^{-1}  Pk0: h^3 Mpc^{-3}
+		lnk[nn] = log(k0);
+		lnPk[nn] = log(Pk0);
+		if (k0 > kmax) kmax = k0;
+		if (k0 < kmin) kmin = k0;
+		nn++;
+	}
+	file2.close();
+	
+	if (kmaxx > 0.) {
+		kmax = kmaxx;
+	}
+	
+	pkintsize = (kmax-kmin)/dk;
+	
+	k_arr = new double[pkintsize];
+	Pk_arr = new double[pkintsize];
+
+	// Interpolate P(k) outside loop
+	for (int i=0; i<pkintsize; i++){
+		k_arr[i] = kmin + (double)i*dk;
+		if (k_arr[i] > kmax) {cout << "kmaxx set too high for CAMB read-in" << flush << endl; exit(1);}
+		Pk_arr[i] = exp(LinearInterpolate(pksize, lnk, lnPk, log(k_arr[i])));
+	}
+	
+	return;
+}
+
+void MV_setparam(double& OmegaM, double& H0_in, double& sigma2_star_in)
+{
+	OmegaMp = pow(OmegaM,1.1);
+	H0 = H0_in;
+	sigma2_star = sigma2_star_in;
+	
+	return;
+}
+
+void MV_Gnm(double** G_nm, double** P_nm, double** G_inv, int n_SNe, double* r, double** rihat, 
+			double* verr, int pkintsize, double dk, double* k_arr, double* ps0)
+{
+	time_t time2;
+	double val; 
+	
+	// --------------------- G_nm ------------------------
+	for (int n=0; n<n_SNe; n++){
+		for (int m=0; m<=n; m++){
+			
+			if (n == m){
+				A = 0.;
+			}
+			else {
+				cosalpha = rihat[0][n]*rihat[0][m] + rihat[1][n]*rihat[1][m] + rihat[2][n]*rihat[2][m];   // -1 to 1
+				if (cosalpha < -1.0 && cosalpha > -1.001) cosalpha = -1.0;
+				if (cosalpha > 1.0 && cosalpha < 1.001) cosalpha = 1.0;
+				
+				alpha = acos(cosalpha);   // [0, pi]
+				
+				sinalpha = sin(alpha);			
+				argument = r[n]*r[n] + r[m]*r[m] - 2.*r[n]*r[m]*cosalpha;			
+				A = sqrt(argument);  // If n=m then argument < 0 but don't use A later
+				
+				c1 = cosalpha/3.;
+				c2 = 1./(A*A)*r[n]*r[m]*sinalpha*sinalpha;
+			}
+			
+			integral=0.;
+			
+			for (int i=0; i<pkintsize; i++){
+				
+				if (n == m) fmnk = 1./3.;
+				else {
+					kA = k_arr[i]*A;
+					kA2 = kA*kA;
+					sinKA = sin(kA);
+					cosKA = cos(kA);
+					
+					fmnk = c1*(sinKA/kA*(3.-6./kA2)+6.*cosKA/kA2)  + c2* ((3./kA2-1.)*sinKA/kA - 3.*cosKA/kA2);
+
+				}
+				
+				integral += ps0[i]*fmnk*dk;
+				
+			} //............. ............................................
+			
+			Gnm = integral*H0*H0*OmegaMp/(2.*pi*pi);
+			G_nm[n][m] = Gnm;
+			P_nm[n][m] = c1;
+			
+			if (Gnm != Gnm ) {
+				cout << "nan in G_nm! at n=" << n << " m=" << m << endl;  
+				cout << integral << flush << endl;
+				exit(1);}
+			
+		}
+		Gnm += (sigma2_star+verr[n]*verr[n]);  // Only add this error for n=m, diagonal terms
+		G_nm[n][n]=Gnm;
+	}
+	
+	// ----------- Fill in second half of matrix ---------
+	for (int n=0; n<n_SNe; n++){
+		for (int m=n+1; m<n_SNe; m++){
+			G_nm[n][m] = G_nm[m][n];
+			P_nm[n][m] = P_nm[m][n];
+		}
+	}
+	
+	// ----------------- Invert G_nm ------------------------
+	
+	// Make a GSL copy of G_nm
+	gsl_matrix * G_nm2 = gsl_matrix_alloc (n_SNe, n_SNe);
+	
+	for (int i=0; i<n_SNe; i++){
+		for (int j=0; j<n_SNe; j++){
+			val = G_nm[i][j];
+			gsl_matrix_set(G_nm2, i, j, val);
+		}
+	}
+	// Invert G_nm2 ......................................
+	gsl_matrix * G_inv0 = gsl_matrix_alloc(n_SNe, n_SNe);
+	gsl_permutation * perm = gsl_permutation_alloc(n_SNe);
+	
+	// Make LU decomposition of matrix G_nm
+	gsl_linalg_LU_decomp (G_nm2, perm, &s);   // This destroys original G_nm2, but don't need this again
+	// Invert the matrix G_nm
+	gsl_linalg_LU_invert (G_nm2, perm, G_inv0);
+	
+	double G_inv_sum = 0.;
+	
+	for (int i=0; i<n_SNe; i++){
+		for (int j=0; j<n_SNe; j++){
+			val = gsl_matrix_get(G_inv0,i,j);
+			G_inv[i][j] = val;
+			G_inv_sum += val;
+		}
+	}
+	return;
+}
+
+void MV_vnvn(double** vnvn, int n_SNe, int NN, double** ri, double* r, double* xN, 
+			 double* yN, double* zN, double* rN, int pkintsize, double dk, double* k_arr, double* ps0)
+{
+	double factor = OmegaMp*H0*H0/(2.*pi*pi);
+	
+	for (int n=0; n<n_SNe; n++){
+		
+		for (int m=0; m<NN; m++){
+			
+			cosalpha = (ri[0][n]*xN[m] + ri[1][n]*yN[m] + ri[2][n]*zN[m])/(r[n]*rN[m]);
+			
+			if (cosalpha < -1.0 && cosalpha > -1.001) cosalpha = -1.0;
+			if (cosalpha > 1.0 && cosalpha < 1.001) cosalpha = 1.0;
+			
+			alpha = acos(cosalpha);   // [0,pi] radians
+			sinalpha = sin(alpha);
+			
+			A2 = r[n]*r[n] + rN[m]*rN[m] - 2.*r[n]*rN[m]*cosalpha;
+			A = sqrt(A2);
+			
+			c1 = cosalpha/3.;
+			c2 = (1./A2)*r[n]*rN[m]*sinalpha*sinalpha;
+			
+			integral=0.;
+			for (int i=0; i<pkintsize; i++){
+				
+				
+				k = k_arr[i];  // kmin + i*dk;
+				kA = k*A;
+				
+				sinKA = sin(kA);
+				cosKA = cos(kA);
+				kA2 = kA*kA;
+				
+				fmnk = c1*(sinKA/kA*(3.-6./kA2)+6.*cosKA/kA2)  + c2* ((3./kA2-1.)*sinKA/kA - 3.*cosKA/kA2);
+	
+				integral += ps0[i]*fmnk*dk;
+				
+			}
+			vnvn[m][n] = integral*factor;
+			if (vnvn[m][n] != vnvn[m][n]) {cout << "vnvn= NAN!! " << m << "  " << n << "  " << vnvn[m][n] << flush << endl; exit(1);}
+			
+		}
+	}
+	
+	return;			
+}
+
+void MV_Qin(double** Q_in, int n_SNe, int NN, double** vnvn, double** w_in)
+{
+	for (int j=0; j<3; j++){
+		for (int n=0; n<n_SNe; n++){
+			Q_in[j][n]=0.;
+			for (int m=0; m< NN; m++) {
+				Q_in[j][n] += w_in[j][m] * vnvn[m][n];
+			}
+			if (Q_in[j][n] != Q_in[j][n]) { cout << j << "  " << n << Q_in[j][n] <<  flush << endl; exit(1); }
+		}
+	}
+	return;
+}
+
+void MV_Mij(double** M_ij_inv, double** G_inv, int n_SNe, double** rihat)
+{
+	
+	double sum;
+	double val;
+	
+	//...................................................
+	gsl_matrix * M_ij = gsl_matrix_alloc(3, 3);
+	
+	for (int i=0; i<3; i++){
+		for (int j=0; j<3; j++){
+			sum=0.;
+			for (int n=0; n<n_SNe; n++){ 
+				for (int m=0; m<n_SNe; m++){                // changed from m<=n   (15/6/12, 1:24pm)
+					sum += G_inv[n][m]*rihat[i][n]*rihat[j][m];
+				}
+			}
+			gsl_matrix_set(M_ij,i,j,sum/2.);
+		}
+	}
+	
+	// Invert M_ij ......................................
+	
+	gsl_matrix * M_inv = gsl_matrix_alloc(3,3);
+	gsl_permutation * perm2 = gsl_permutation_alloc(3);
+	
+	// Make LU decomposition of matrix m
+	gsl_linalg_LU_decomp (M_ij, perm2, &s);   // This destroys original matrix, but don't need this again
+	
+	// Invert the matrix m
+	gsl_linalg_LU_invert (M_ij, perm2, M_inv);
+	
+	// Output M_ij_inv ......................................
+	
+	for (int i=0; i<3; i++){
+		for (int j=0; j<3; j++){
+			val = gsl_matrix_get(M_inv,i,j);
+			M_ij_inv[i][j] = val;
+		}
+	}
+	
+	return;
+}
+
+void MV_lambda_ij(double** lambda_ij, double** M_ij_inv, double** G_inv, 
+				  double** Q_in, double** rihat, int n_SNe)
+{
+	double sum_mn;
+	
+	for (int i=0; i<3; i++){
+		for (int j=0; j<3; j++){
+			sum=0.;
+			for (int l=0; l<3; l++){
+				sum_mn=0.;
+				for (int m=0; m<n_SNe; m++){
+					for (int n=0; n<n_SNe; n++){
+						sum_mn += G_inv[n][m]*Q_in[l][m]*rihat[j][n];
+					}
+				}
+				sum += (sum_mn - Kroneckerdelta(l,j)) * M_ij_inv[i][l];
+			}
+			lambda_ij[i][j] = sum;
+		}
+		
+	}
+	
+	return;
+}
+
+void MV_weights(double** weight_in, double* u, double** G_inv, double** Q_in, 
+				double** lambda_ij, double** rihat, int n_SNe, double* vrad)
+{
+	
+	double sum, sumq;
+	
+	for (int i=0; i<3; i++){
+		u[i]=0.;
+		for (int n=0; n<n_SNe; n++){
+			sum=0.;
+			for (int m=0; m<n_SNe; m++){
+				sumq=0.;
+				for (int q=0; q<3; q++){
+					sumq += lambda_ij[i][q]*rihat[q][m];
+				}
+				sum += G_inv[n][m]*(Q_in[i][m] - sumq/2.);
+			}
+			weight_in[i][n] = sum;
+			if (weight_in[i][n] != weight_in[i][n]){
+				cout << "weight = NAN in weight loop!!" <<  flush << endl; 
+				exit(1);
+			}
+			u[i] += weight_in[i][n] * vrad[n];
+		}
+	}
+	
+	return;
+}
+
+void MV_W2_pq(double** W2_pq, int n_SNe, double** rihat, double* r, 
+			  double** weight_in, int pkintsize, double* k_arr)
+// W2_pq: 9 x pkintsize array
+//        Indices correspond to
+//         0,0[k]   0,1[k]   0,2[k]            [0][k]   [1][k]   [2][k]
+//         1,0[k]   1,1[k]   1,2[k]      =     [3][k]   [4][k]   [5][k]
+//         2,0[k]   2,1[k]   2,2[k]            [6][k]   [7][k]   [8][k]
+{
+	
+	int count1;
+	double val;
+	int neg_count;
+	
+	// Set W2_pq[9][k] to zero
+	for (int i=0; i<9; i++){
+		for (int kk=0; kk<pkintsize; kk++){
+			W2_pq[i][kk] = 0.;
+		}
+	}
+	
+	
+	count1 = 0;
+	neg_count = 0;
+	for (int n=0; n<n_SNe; n++){
+		for (int m=0; m<n_SNe; m++){
+			
+			if (n!=m){  // Setup for fmnk
+				cosalpha = rihat[0][n]*rihat[0][m] + rihat[1][n]*rihat[1][m] + rihat[2][n]*rihat[2][m];
+				alpha = acos(cosalpha);
+				if (cosalpha < -1.0 && cosalpha > -1.001) alpha = acos(-1.0);
+				if (cosalpha > 1.0 && cosalpha < 1.001) alpha = acos(1.0);
+				sinalpha = sin(alpha);
+				
+				c1 = cosalpha/3.;
+				val = r[n]*r[n] + r[m]*r[m] - 2.*r[n]*r[m]*cosalpha;
+				if (val > 0.) {
+					A = sqrt(val);
+					c2 = 1./(A*A)*r[n]*r[m]*sinalpha*sinalpha;
+				}
+				if (val == 0.) {
+					cout << "A = 0 in fmnk at n = " << n << " , m = " << m << endl;
+					A = 0.;
+				}
+				if (val < 0.) {
+					cout << "A = sqrt(-ve) in fmnk at n = " << n << " , m = " << m << endl;
+					cout << "Have set A to zero, fmnk to 1/3" << endl;
+					A=0.;
+					neg_count ++;
+				}
+				
+			}
+			
+			for (int kk=0; kk<pkintsize; kk++){
+				
+				if (n==m || A==0) fmnk = 1./3.;
+				else {
+					kA = k_arr[kk]*A;
+					sinKA = sin(kA);
+					cosKA = cos(kA);
+					kA2 = kA*kA;
+					
+					fmnk = c1*(sinKA/kA*(3.-6./kA2)+6.*cosKA/kA2)  + c2* ((3./kA2-1.)*sinKA/kA - 3.*cosKA/kA2);
+					if (fmnk != fmnk) {
+						cout << "Error in MV_W2_pq:" << endl;
+						cout << "  fmnk = NAN at n = " << n << " , m = " << m << ", k = " << k_arr[kk] << flush << endl;
+						cout << "c1 = " << c1 << " c2 = " << c2 << " cosalpha = " << cosalpha << " A = " << A << " val = " << r[n]*r[n] + r[m]*r[m] - 2.*r[n]*r[m]*cosalpha << flush << endl;
+						cout << rihat[0][n] << "  " << rihat[0][m] << flush << endl;
+						cout << rihat[1][n] << "  " << rihat[1][m] << flush << endl;
+						cout << rihat[2][n] << "  " << rihat[2][m] << flush << endl;
+						exit(1);
+					}
+				}
+				
+				W2_pq[0][kk] += weight_in[0][n]*weight_in[0][m] * fmnk;
+				W2_pq[1][kk] += weight_in[0][n]*weight_in[1][m] * fmnk;
+				W2_pq[2][kk] += weight_in[0][n]*weight_in[2][m] * fmnk;
+				W2_pq[3][kk] += weight_in[1][n]*weight_in[0][m] * fmnk;
+				W2_pq[4][kk] += weight_in[1][n]*weight_in[1][m] * fmnk;
+				W2_pq[5][kk] += weight_in[1][n]*weight_in[2][m] * fmnk;
+				W2_pq[6][kk] += weight_in[2][n]*weight_in[0][m] * fmnk;
+				W2_pq[7][kk] += weight_in[2][n]*weight_in[1][m] * fmnk;
+				W2_pq[8][kk] += weight_in[2][n]*weight_in[2][m] * fmnk;
+				
+			}
+			
+		}
+		count1++;
+		if (count1 % 10 == 0) cout << count1 << "  " << flush;
+	}
+	cout << neg_count << " with A=sqrt(-ve) out of " << n_SNe << " x " << n_SNe << endl;
+	cout << endl;
+	return;
+}
+
+
+vector<double> MV_bulkflow(vector<vector<double> > Data, vector<double> V_err, double sigmastar2)
+{
+  //cout << "Starting" << endl;
+  time_t starttime, endtime, time1;
+  starttime = time (NULL);
+  
+ int ngal = Data.size(); // Number of galaxies in file
+  
+  double** rihat = new double*[3];
+  for (int i=0; i<3; i++)
+  {
+    rihat[i] = new double[ngal];
+  }
+  
+  double** ri = new double*[3];
+  for (int i=0; i<3; i++)
+  {
+    ri[i] = new double[ngal];
+  }
+  
+  double* vrad = new double[ngal];
+  double* rad = new double[ngal];
+  double* verr = new double[ngal];
+  
+  double ri_r;
+  
+  for (int i=0; i<ngal; i++)
+  {
+   ri[0][i] = Data[i][0];
+   ri[1][i] = Data[i][1];
+   ri[2][i] = Data[i][2];
+   ri_r = pow( pow(ri[0][i],2.0) + pow(ri[1][i],2.0) + pow(ri[2][i],2.0)  ,0.5);
+   rihat[0][i] = ri[0][i] / ri_r;
+   rihat[1][i] = ri[1][i] / ri_r;
+   rihat[2][i] = ri[2][i] / ri_r;
+   
+   vrad[i] = (Data[i][0]*Data[i][3] + Data[i][1]*Data[i][4] + Data[i][2]*Data[i][5]) / ri_r;
+   
+   verr[i] = V_err[i];
+   
+   rad[i] = ri_r;
+  }
+  
+  //-------------------------------------------------------------------------------------------
+  //---------------------------------- Run Minimum Variance method ----------------------------------
+  //-------------------------------------------------------------------------------------------
+  
+  
+  //-------------------------------------------------------------------------------------------
+  //---------------------------------- Calculate G_nm & P_nm ----------------------------------
+  //-------------------------------------------------------------------------------------------
+  
+  // Create G_mn[ngal][ngal]
+  //gsl_matrix * G_nm = gsl_matrix_alloc (ngal, ngal);
+  double** G_nm = new double*[ngal];
+  for (int i = 0; i < ngal; i++) {
+    G_nm[i] = new double[ngal];
+  }
+  
+  // Create G_inv[ngal][ngal]
+  double** G_inv = new double*[ngal];
+  for (int i = 0; i < ngal; i++) {
+    G_inv[i] = new double[ngal];
+  }
+  
+  // Create P_mn[ngal][ngal]
+  double** P_nm = new double*[ngal];
+  for (int i = 0; i < ngal; i++) {
+    P_nm[i] = new double[ngal];
+  }
+  
+  MV_Gnm(G_nm, P_nm, G_inv, ngal, rad, rihat, verr, pkintsize, dk, k_arr, Pk_arr);
+  
+  // Create Q_in[3][ngal]
+  double** Q_in = new double*[3];
+  for (int i = 0; i < 3; i++) {
+    Q_in[i] = new double[ngal];
+  }
+  
+  // Create vnvn[NN][ngal]
+  double** vnvn = new double*[NN];
+  for (int i=0; i<NN; i++){
+    vnvn[i] = new double[ngal];
+  }
+  
+  MV_vnvn(vnvn, ngal, NN, ri, rad, xN, yN, zN, rN, pkintsize, dk, k_arr, Pk_arr);
+  
+  // Calculate Q_in
+  MV_Qin(Q_in, ngal, NN, vnvn, w_in);
+  
+  double** M_ij_inv = new double*[3];
+  for (int i=0; i<3; i++){
+    M_ij_inv[i] = new double[3];
+  }
+  
+  MV_Mij(M_ij_inv, G_inv, ngal, rihat);
+
+  // Create lambda_ij[3][3]
+  double** lambda_ij = new double*[3];
+  for (int i = 0; i < 3; i++) {
+    lambda_ij[i] = new double[3];
+  }
+  
+  MV_lambda_ij(lambda_ij, M_ij_inv, G_inv, Q_in, rihat, ngal);
+  
+  // Create weight_in[3][ngal]
+  double** weight_in = new double*[3];
+  for (int i = 0; i < 3; i++) {
+    weight_in[i] = new double[ngal];
+  }
+  
+  double* u = new double[3];   // best estimates of moments U
+  double sumq;
+  double w_ave[3];  // average weight_in
+  double sumtest2[3];
+  double cosalpha;
+  
+  MV_weights(weight_in, u, G_inv, Q_in,lambda_ij, rihat, ngal, vrad);
+  
+  //--------------------------------------------------------------------------------------
+  //-------------------- Calculate Bulk Flow Magnitude & Direction, with errors ----------
+  //--------------------------------------------------------------------------------------
+  
+  vector<double> U(3);
+  U[0] = u[0];
+  U[1] = u[1];
+  U[2] = u[2];
+  
+  //cout << "ux = " << u[0] << ", uy = " << u[1] << ", uz = " << u[2] << endl;
+  //cout << "Mag: " << BFmag << endl;  
+  
+  //--------------------------------------------------------------------------------------
+  //------------------------------ Calculate Window Function -----------------------------
+  //--------------------------------------------------------------------------------------
+  
+  endtime = time (NULL);
+  //cout << "Time taken = " << (endtime-starttime)/60. << " minutes" << endl;
+  
+  
+  
+  for (int i=0; i<3; i++)
+  {
+    delete [] rihat[i];
+  }
+  delete [] rihat;
+  
+  for (int i=0; i<3; i++)
+  {
+    delete [] ri[i];
+  }
+  delete [] ri;
+  
+  delete [] vrad;
+  delete [] rad;
+  delete [] verr;
+  delete [] u;
+  
+  for (int i = 0; i < ngal; i++) {
+    delete [] G_nm[i];
+  }
+  delete [] G_nm;
+  
+  for (int i = 0; i < ngal; i++) {
+    delete [] G_inv[i];
+  }
+  delete [] G_inv;
+  
+  for (int i = 0; i < ngal; i++) {
+    delete [] P_nm[i];
+  }
+  delete [] P_nm;
+  
+  for (int i = 0; i < 3; i++) {
+    delete [] Q_in[i];
+  }
+  delete [] Q_in;
+  
+  for (int i=0; i<NN; i++){
+    delete [] vnvn[i];
+  }
+  delete [] vnvn;
+  
+  for (int i=0; i<3; i++){
+    delete  M_ij_inv[i];
+  }
+  delete [] M_ij_inv;
+  
+  for (int i = 0; i < 3; i++) {
+    delete [] lambda_ij[i];
+  }
+  delete [] lambda_ij;
+  
+  for (int i = 0; i < 3; i++) {
+    delete [] weight_in[i];
+  }
+  delete [] weight_in;
+  
+  return U;
+}
+
+int main()
+{
+ //Setting t0
+ clock_t t_start = clock();
+ 
+ //Setting up PRNG
+ const gsl_rng_type * T;
+ gsl_rng * r;
+ gsl_rng_env_setup();
+ T = gsl_rng_default;
+ r = gsl_rng_alloc (T);
+ 
+ // !!!PARAMETERS ARE SET HERE!!!
+ int n_cols = 6;
+ int n_rows = 100000;
+ 
+ int n_sub = 300; //Number of galaxies used for each bulk flow calculation
+ int n_draw = 120; //Number of bulk flows calculated per rotation
+ int n_sub_spher = 80; //Number of rotations
+ 
+ double sigma_cos2 = 62500.0; // 250*250 Cosmic variance term
+ 
+ //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
+ vector<double> Angle(1);
+ vector<double> Radius_eff(1);
+ //Angle[0] = 1.0; Radius_eff[0] = 100;
+ //Angle[0] = 0.75; Radius_eff[0] = 110;
+ //Angle[0] = 0.5; Radius_eff[0] = 130;
+ //Angle[0] = 0.37; Radius_eff[0] = 160;
+ //Angle[0] = 0.25; Radius_eff[0] = 200;
+ //Angle[0] = 0.17; Radius_eff[0] = 260;
+ //Angle[0] = 0.125; Radius_eff[0] = 320;
+ Angle[0] = 0.062; Radius_eff[0] = 500;
+ 
+ 
+ //Radius_eff[0] = 50;
+ 
+ //Radius_eff[1] = 200;
+ 
+ //Radius_eff[0] = 300;
+ //Radius_eff[1] = 400;
+ 
+ //Radius_eff[0] = 150;
+ //Radius_eff[0] = 250;
+ //Radius_eff[0] = 350;
+ 
+ string ROOT_DIR = "/Users/perandersen/Data/";
+ string SUB_DIR = "10";
+ // !!!PARAMETERS ARE SET HERE!!!
+ 
+ //Preparing working ints and vectors
+ vector<vector<double> > Hori_xyz(n_rows);
+ 
+ int i_chosen[n_sub];
+ int i_sample[n_rows];
+ 
+ for (int i=0; i<n_rows;i++)
+ {
+   i_sample[i] = i;
+ }
+ vector<vector<double> > Hori_sub(n_sub);
+ for (int i=0; i<Hori_sub.size(); i++)
+ {
+   Hori_sub[i].resize(6);
+ }
+ 
+ vector<double> Verr;
+ vector<vector<double> > Bulk_flow(n_draw);
+ for (int i=0; i<Bulk_flow.size(); i++)
+ {
+   Bulk_flow[i].resize(3);
+ }
+ 
+ for (int i = 0; i < 3; i++)
+ {
+     w_in[i] = new double[NN];
+ }
+ 
+ //------------------------------------- Read in CAMB P(k) -------------------------------
+ 
+ //This converts the string to a char
+ string pk_fil = ROOT_DIR + "BulkFlow/DataCommon/pk_planck_z0_nonlinear_matterpower.dat";
+ char pk_file[pk_fil.size()+1];
+ for (int i=0; i<pk_fil.size()+1; i++)
+ {
+   pk_file[i] = pk_fil[i];
+ }
+ 
+ readin_CAMB(pk_file, kmaxx, dk, pkintsize, k_arr, Pk_arr);
+ MV_setparam(OM, H0, sigma_cos2);
+ 
+ 
+ //------------------------------------ Beginning main loop ------------------------------
+ for (int i_angle=0; i_angle<Angle.size(); i_angle++)
+ {
+     //---------------------------------- Read in ideal survey -------------------------------
+     
+ 
+     //This converts the string to a char
+     string i_ideal_read = static_cast<ostringstream*>( &(ostringstream() << Radius_eff[i_angle]) )->str();
+     string ideal_loc = ROOT_DIR + "BulkFlow/DataCommon/mock_ideal_ri" + i_ideal_read + "_n1200.txt";
+     char idealsurveyfile[ideal_loc.size()+1];
+     for (int i=0; i<ideal_loc.size()+1; i++)
+     {
+       idealsurveyfile[i] = ideal_loc[i];
+     }
+     cout << idealsurveyfile << endl;
+     ifstream file2(idealsurveyfile);
+     if ( !file2 )
+     { // opened failed
+       cout << endl << "cannot open " << idealsurveyfile <<  " for read-in" << flush << endl;
+       exit( -1 );
+     }
+     for (int n=0; n<NN; n++)
+     {
+       file2 >> ra >> decli >> z;
+       rN[n] = dxx_mpch(z, OM, OL);
+       phi = ra*pi/180.; // radians
+       theta = (90.-decli)*pi/180.; // radians
+       xN[n] = rN[n]*sin(theta)*cos(phi);
+       yN[n] = rN[n]*sin(theta)*sin(phi);
+       zN[n] = rN[n]*cos(theta);
+       factor = 3./(rN[n]*NN);
+       
+       w_in[0][n] = factor*xN[n];
+       w_in[1][n] = factor*yN[n];
+       w_in[2][n] = factor*zN[n];
+     }
+     file2.close();
+     //---------------------------------------------------------------------------------------
+ 
+     string i_angle_read = static_cast<ostringstream*>( &(ostringstream() << Angle[i_angle]) )->str();
+     cout << "Reading data..." << endl << endl;
+     
+     
+     //These five lines are needed since c++ casts "1.0" to "1" in string. 
+     int value = atoi(i_angle_read.c_str());
+     if (value == 1)
+     {
+       i_angle_read = "1.0";
+     }
+     cout << "Angle: " << i_angle_read << endl;
+     for (int i_sub=66; i_sub<n_sub_spher; i_sub++) 
+     {
+         cout << "n: " << i_sub << endl;
+         string i_read = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
+       
+         Hori_xyz = Read_to_2d_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR + "/Hori_sub_cart_" + i_angle_read + "_" + i_read + ".txt", n_rows, n_cols);
+  
+         for (int i_draw=0; i_draw<n_draw; i_draw++)
+         {
+             gsl_ran_choose(r, i_chosen, n_sub, i_sample, n_rows, sizeof(int)); 
+       
+             for (int i=0; i<Hori_sub.size(); i++)
+             {
+               Hori_sub[i][0] = Hori_xyz[i_chosen[i]][0];
+               Hori_sub[i][1] = Hori_xyz[i_chosen[i]][1];
+               Hori_sub[i][2] = Hori_xyz[i_chosen[i]][2];
+               Hori_sub[i][3] = Hori_xyz[i_chosen[i]][3];
+               Hori_sub[i][4] = Hori_xyz[i_chosen[i]][4];
+               Hori_sub[i][5] = Hori_xyz[i_chosen[i]][5];
+             }
+             Verr = Sigma_v(Hori_sub,0.1);
+             Bulk_flow[i_draw] = MV_bulkflow(Hori_sub, Verr, sigma_cos2);
+         }
+     string i_save = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
+     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MV/MV_Bulk_flows_" + i_angle_read + "_n300_" + i_save + ".txt");
+     }
+ }
+ 
+ //Cleaning up
+ delete xN;
+ delete yN;
+ delete zN;
+ delete rN;
+ 
+ printf("Time taken: %.2fs\n", (double)(clock() - t_start)/CLOCKS_PER_SEC);
+}
