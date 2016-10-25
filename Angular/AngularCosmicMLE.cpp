@@ -13,7 +13,7 @@
 
 /*
  Compile with:
- g++ -o CMLE2 CosmicMLE2.cpp `gsl-config --cflags --libs` -O3
+ g++-4.9 -o ACMLE0 AngularCosmicMLE.cpp `gsl-config --cflags --libs` -O3
  
  Use:
  GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
@@ -21,8 +21,10 @@
  For tcsh syntax: setenv GSL_RNG_SEED "10"
  
  */
+ 
+using namespace std;
 
-vector<double> MLE_bulkflow(vector<vector<double> > Data, vector<double> V_err,double sigmastar2)
+double MLE_bulkflow(vector<vector<double> > Data, vector<double> V_err,double sigmastar2)
 {
     double Aij, w_in, MLmag;
     double radius, rihati, rihatj;
@@ -86,7 +88,10 @@ vector<double> MLE_bulkflow(vector<vector<double> > Data, vector<double> V_err,d
         }
     }
     
-    return uML;
+    // MLE bulk flow amplitude
+    MLmag = sqrt(uML[0]*uML[0] + uML[1]*uML[1] + uML[2]*uML[2]);
+    
+    return MLmag;
 }
 
 int main()
@@ -103,19 +108,29 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  int n_cols = 6;
- int n_rows = 45000;
+ int n_rows = 10000;
  
  int n_sub = 1000; //Number of galaxies used for each bulk flow calculation
-
- int n_draw = 3; //Number of bulk flows calculated
- int n_rot = 1689; //Number of rotations
+ int n_draw = 200; //Number of bulk flows calculated per rotation
+ int n_sub_spher = 60; //Number of rotations
  
  double sigma_cos2 = 250.0*250.0; //Cosmic variance term
  
+ //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
+ vector<double> Angle(1);
+ Angle[0] = 1.0;
  
- string ROOT_DIR = "/home/per/Data/"; 
- //string ROOT_DIR = "/Users/perandersen/Data/";
- string SUB_DIR = "8A";
+ //Angle[1] = 0.5;
+ //Angle[2] = 0.25;
+ //Angle[3] = 0.125;
+ 
+ //Angle[0] = 0.17;
+ //Angle[1] = 0.37;
+ //Angle[2] = 0.75;
+ 
+ 
+ string ROOT_DIR = "/Users/perandersen/Data/";
+ string SUB_DIR = "0A";
  
  // !!!PARAMETERS ARE SET HERE!!!
 
@@ -135,39 +150,49 @@ int main()
    Hori_sub[i].resize(6);
  }
  
-vector<double> Verr;
-vector<vector<double> > Bulk_flow(n_draw);
-for (int i=0; i<Bulk_flow.size(); i++)
-{
-  Bulk_flow[i].resize(3);
-}
+ vector<double> Verr;
+ vector<double> Bulk_flow(n_draw);
  
-
- for (int i_rot=0; i_rot<n_rot; i_rot++)  
+ //------------------------------- Beginning main loop ----------------------------------
+ for (int i_angle=0; i_angle<Angle.size(); i_angle++)
  {
-     string i_rot_str = static_cast<ostringstream*>( &(ostringstream() << i_rot) )->str();
-     Hori_xyz = Read_to_2d_vector(ROOT_DIR + "BulkFlow/1/Hori_sub_cart_1.0_" + i_rot_str + ".txt", n_rows, n_cols);
-     cout << "n: " << i_rot << endl;
-     for (int i_draw=0; i_draw<n_draw; i_draw++)
-     {
-         
-         gsl_ran_choose(r, i_chosen, n_sub, i_sample, n_rows, sizeof(int)); 
-         for (int i=0; i<Hori_sub.size(); i++)
-         {
-           Hori_sub[i][0] = Hori_xyz[i_chosen[i]][0];
-           Hori_sub[i][1] = Hori_xyz[i_chosen[i]][1];
-           Hori_sub[i][2] = Hori_xyz[i_chosen[i]][2];
-           Hori_sub[i][3] = Hori_xyz[i_chosen[i]][3];
-           Hori_sub[i][4] = Hori_xyz[i_chosen[i]][4];
-           Hori_sub[i][5] = Hori_xyz[i_chosen[i]][5];
-         }
-         Verr = Sigma_v(Hori_sub,0.1);
-         Bulk_flow[i_draw] = MLE_bulkflow(Hori_sub, Verr, sigma_cos2);
-     }
+     string i_angle_read = static_cast<ostringstream*>( &(ostringstream() << Angle[i_angle]) )->str();
+     cout << "Reading data..." << endl << endl;
      
-     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MLE/MLE_Bulk_flows_1.0_" + i_rot_str + "_1000.txt");
+     
+     //These five lines are needed since c++ casts "1.0" to "1" in string. 
+     int value = atoi(i_angle_read.c_str());
+     if (value == 1)
+     {
+       i_angle_read = "1.0";
+     }
+     for (int i_sub=0; i_sub<n_sub_spher; i_sub++) 
+     {
+         cout << "n: " << i_sub << endl;
+         string i_read = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
+   
+         Hori_xyz = Read_to_2d_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR + "/Hori_sub_cart_" + i_angle_read + "_" + i_read + ".txt", n_rows, n_cols);
+  
+         for (int i_draw=0; i_draw<n_draw; i_draw++)
+         {
+             gsl_ran_choose(r, i_chosen, n_sub, i_sample, n_rows, sizeof(int)); 
+    
+             for (int i=0; i<Hori_sub.size(); i++)
+             {
+               Hori_sub[i][0] = Hori_xyz[i_chosen[i]][0];
+               Hori_sub[i][1] = Hori_xyz[i_chosen[i]][1];
+               Hori_sub[i][2] = Hori_xyz[i_chosen[i]][2];
+               Hori_sub[i][3] = Hori_xyz[i_chosen[i]][3];
+               Hori_sub[i][4] = Hori_xyz[i_chosen[i]][4];
+               Hori_sub[i][5] = Hori_xyz[i_chosen[i]][5];
+             }
+             Verr = Sigma_v(Hori_sub,0.1);
+             Bulk_flow[i_draw] = MLE_bulkflow(Hori_sub, Verr, sigma_cos2);
+         }
+
+     string i_save = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
+     save_vector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MLE/MLE_Bulk_flows_" + i_angle_read + "_" + i_save + ".txt");
+     }
  }
  printf("Time taken: %.2fs\n", (double)(clock() - t_start)/CLOCKS_PER_SEC);
 }
-
-

@@ -13,7 +13,7 @@
 
 /*
  Compile with:
- g++-4.9 -o ACMLE1 AngularCosmicMLE2.cpp `gsl-config --cflags --libs` -O3
+ g++ -o ACMLE3 AngularCosmicMLE2.cpp `gsl-config --cflags --libs` -O3
  
  Use:
  GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
@@ -21,8 +21,6 @@
  For tcsh syntax: setenv GSL_RNG_SEED "10"
  
  */
- 
-using namespace std;
 
 vector<double> MLE_bulkflow(vector<vector<double> > Data, vector<double> V_err,double sigmastar2)
 {
@@ -105,13 +103,13 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  int n_cols = 6;
- int n_rows = 100000;
+ int n_rows =45000;
  
- int n_sub = 300; //Number of galaxies used for each bulk flow calculation
+ int n_sub = 500; //Number of galaxies used for each bulk flow calculation
  int n_draw = 1000; //Number of bulk flows calculated per rotation
- int n_sub_spher = 80; //Number of rotations
+ int n_sub_spher = 1689; //Number of rotations
  
- double sigma_cos2 = 250.0*250.0; //Cosmic variance term
+ double sigma_cos2 = 250.*250.; //Cosmic variance term
  
  //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
  vector<double> Angle(2);
@@ -128,7 +126,8 @@ int main()
  Angle[1] = 0.75;
  
  
- string ROOT_DIR = "/Users/perandersen/Data/";
+ //string ROOT_DIR = "/Users/perandersen/Data/";
+ string ROOT_DIR = "/home/per/Data/";
  string SUB_DIR = "1";
  
  // !!!PARAMETERS ARE SET HERE!!!
@@ -169,7 +168,7 @@ int main()
      {
        i_angle_read = "1.0";
      }
-     for (int i_sub=75; i_sub<n_sub_spher; i_sub++) 
+     for (int i_sub=0; i_sub<n_sub_spher; i_sub++) 
      {
          cout << "n: " << i_sub << endl;
          string i_read = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
@@ -194,7 +193,7 @@ int main()
          }
 
      string i_save = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
-     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MLE/MLE_Bulk_flows_" + i_angle_read + "_" + i_save + ".txt");
+     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MLE/MLE_Bulk_flows_" + i_angle_read + "_" + i_save + "_n500.txt");
      }
  }
  printf("Time taken: %.2fs\n", (double)(clock() - t_start)/CLOCKS_PER_SEC);

@@ -13,7 +13,7 @@
 
 /*
  Compile with:
- g++ -o CMLE2 CosmicMLE2.cpp `gsl-config --cflags --libs` -O3
+ g++ -o CMLE3 CosmicMLE2.cpp `gsl-config --cflags --libs` -O3
  
  Use:
  GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937

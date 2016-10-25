@@ -17,14 +17,16 @@
 #include "perfuncs.h"
 
 /*
-Compile with:
-g++ -o ACMV4 AngularCosmicMV2.cpp `gsl-config --cflags --libs` -O3
-
-Use:
-GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
-To set seed and type
-For tcsh syntax: setenv GSL_RNG_SEED "10"
-*/
+ 
+ Compile with:
+ g++ -o ACMV4 AngularCosmicMV2.cpp `gsl-config --cflags --libs` -O3
+ 
+ Use:
+ GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
+ To set seed and type
+ For tcsh syntax: setenv GSL_RNG_SEED "10"
+ 
+ */
 
 int s;
 double k, fmnk, alpha, A, A2, cosalpha, sinalpha, kA;

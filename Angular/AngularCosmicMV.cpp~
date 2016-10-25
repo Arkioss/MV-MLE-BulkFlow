@@ -17,14 +17,17 @@
 #include "perfuncs.h"
 
 /*
-Compile with:
-g++ -o ACMV4 AngularCosmicMV2.cpp `gsl-config --cflags --libs` -O3
-
-Use:
-GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
-To set seed and type
-For tcsh syntax: setenv GSL_RNG_SEED "10"
-*/
+ Compile with:
+ g++-4.9 -o ACMV5 AngularCosmicMV2.cpp `gsl-config --cflags --libs` -O3
+ 
+ Use:
+ GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
+ To set seed and type
+ For tcsh syntax: setenv GSL_RNG_SEED "10"
+ 
+ */
+ 
+using namespace std;
 
 int s;
 double k, fmnk, alpha, A, A2, cosalpha, sinalpha, kA;
@@ -43,7 +46,7 @@ double H0 = 100.;    // units:  [h km s^-1 Mpc^-1]
 double dk=0.01;     // For integration
 double kmaxx = 2.;   // Accurate but slow
 // ------------ FOR IDEAL SURVEY ------------
-int NN=1200;    // Number points in ideal survey
+int NN=1000;    // Number points in ideal survey
 
 //i.e. random, isotropic set of points with density n(r) \propto exp(-r^2/2R_l^2)
 double ra, decli, z, phi, theta;
@@ -277,7 +280,6 @@ void MV_Gnm(double** G_nm, double** P_nm, double** G_inv, int n_SNe, double* r, 
 	// Invert the matrix G_nm
 	gsl_linalg_LU_invert (G_nm2, perm, G_inv0);
 	
-	
 	double G_inv_sum = 0.;
 	
 	for (int i=0; i<n_SNe; i++){
@@ -287,8 +289,6 @@ void MV_Gnm(double** G_nm, double** P_nm, double** G_inv, int n_SNe, double* r, 
 			G_inv_sum += val;
 		}
 	}
-	gsl_matrix_free(G_inv0);
-	gsl_matrix_free(G_nm2);
 	return;
 }
 
@@ -394,8 +394,7 @@ void MV_Mij(double** M_ij_inv, double** G_inv, int n_SNe, double** rihat)
 			M_ij_inv[i][j] = val;
 		}
 	}
-	gsl_matrix_free(M_ij);
-	gsl_matrix_free(M_inv);
+	
 	return;
 }
 
@@ -453,102 +452,10 @@ void MV_weights(double** weight_in, double* u, double** G_inv, double** Q_in,
 	return;
 }
 
-void MV_W2_pq(double** W2_pq, int n_SNe, double** rihat, double* r, 
-			  double** weight_in, int pkintsize, double* k_arr)
-// W2_pq: 9 x pkintsize array
-//        Indices correspond to
-//         0,0[k]   0,1[k]   0,2[k]            [0][k]   [1][k]   [2][k]
-//         1,0[k]   1,1[k]   1,2[k]      =     [3][k]   [4][k]   [5][k]
-//         2,0[k]   2,1[k]   2,2[k]            [6][k]   [7][k]   [8][k]
-{
-	
-	int count1;
-	double val;
-	int neg_count;
-	
-	// Set W2_pq[9][k] to zero
-	for (int i=0; i<9; i++){
-		for (int kk=0; kk<pkintsize; kk++){
-			W2_pq[i][kk] = 0.;
-		}
-	}
-	
-	
-	count1 = 0;
-	neg_count = 0;
-	for (int n=0; n<n_SNe; n++){
-		for (int m=0; m<n_SNe; m++){
-			
-			if (n!=m){  // Setup for fmnk
-				cosalpha = rihat[0][n]*rihat[0][m] + rihat[1][n]*rihat[1][m] + rihat[2][n]*rihat[2][m];
-				alpha = acos(cosalpha);
-				if (cosalpha < -1.0 && cosalpha > -1.001) alpha = acos(-1.0);
-				if (cosalpha > 1.0 && cosalpha < 1.001) alpha = acos(1.0);
-				sinalpha = sin(alpha);
-				
-				c1 = cosalpha/3.;
-				val = r[n]*r[n] + r[m]*r[m] - 2.*r[n]*r[m]*cosalpha;
-				if (val > 0.) {
-					A = sqrt(val);
-					c2 = 1./(A*A)*r[n]*r[m]*sinalpha*sinalpha;
-				}
-				if (val == 0.) {
-					cout << "A = 0 in fmnk at n = " << n << " , m = " << m << endl;
-					A = 0.;
-				}
-				if (val < 0.) {
-					cout << "A = sqrt(-ve) in fmnk at n = " << n << " , m = " << m << endl;
-					cout << "Have set A to zero, fmnk to 1/3" << endl;
-					A=0.;
-					neg_count ++;
-				}
-				
-			}
-			
-			for (int kk=0; kk<pkintsize; kk++){
-				
-				if (n==m || A==0) fmnk = 1./3.;
-				else {
-					kA = k_arr[kk]*A;
-					sinKA = sin(kA);
-					cosKA = cos(kA);
-					kA2 = kA*kA;
-					
-					fmnk = c1*(sinKA/kA*(3.-6./kA2)+6.*cosKA/kA2)  + c2* ((3./kA2-1.)*sinKA/kA - 3.*cosKA/kA2);
-					if (fmnk != fmnk) {
-						cout << "Error in MV_W2_pq:" << endl;
-						cout << "  fmnk = NAN at n = " << n << " , m = " << m << ", k = " << k_arr[kk] << flush << endl;
-						cout << "c1 = " << c1 << " c2 = " << c2 << " cosalpha = " << cosalpha << " A = " << A << " val = " << r[n]*r[n] + r[m]*r[m] - 2.*r[n]*r[m]*cosalpha << flush << endl;
-						cout << rihat[0][n] << "  " << rihat[0][m] << flush << endl;
-						cout << rihat[1][n] << "  " << rihat[1][m] << flush << endl;
-						cout << rihat[2][n] << "  " << rihat[2][m] << flush << endl;
-						exit(1);
-					}
-				}
-				
-				W2_pq[0][kk] += weight_in[0][n]*weight_in[0][m] * fmnk;
-				W2_pq[1][kk] += weight_in[0][n]*weight_in[1][m] * fmnk;
-				W2_pq[2][kk] += weight_in[0][n]*weight_in[2][m] * fmnk;
-				W2_pq[3][kk] += weight_in[1][n]*weight_in[0][m] * fmnk;
-				W2_pq[4][kk] += weight_in[1][n]*weight_in[1][m] * fmnk;
-				W2_pq[5][kk] += weight_in[1][n]*weight_in[2][m] * fmnk;
-				W2_pq[6][kk] += weight_in[2][n]*weight_in[0][m] * fmnk;
-				W2_pq[7][kk] += weight_in[2][n]*weight_in[1][m] * fmnk;
-				W2_pq[8][kk] += weight_in[2][n]*weight_in[2][m] * fmnk;
-				
-			}
-			
-		}
-		count1++;
-		if (count1 % 10 == 0) cout << count1 << "  " << flush;
-	}
-	cout << neg_count << " with A=sqrt(-ve) out of " << n_SNe << " x " << n_SNe << endl;
-	cout << endl;
-	return;
-}
 
 
-vector<double> MV_bulkflow(vector<vector<double> > Data, vector<double> V_err, double sigmastar2)
+
+double MV_bulkflow(vector<vector<double> > Data, vector<double> V_err, double sigmastar2)
 {
   //cout << "Starting" << endl;
   time_t starttime, endtime, time1;
@@ -667,25 +574,19 @@ vector<double> MV_bulkflow(vector<vector<double> > Data, vector<double> V_err, d
   
   MV_weights(weight_in, u, G_inv, Q_in,lambda_ij, rihat, ngal, vrad);
   
-  //--------------------------------------------------------------------------------------
-  //-------------------- Calculate Bulk Flow Magnitude & Direction, with errors ----------
-  //--------------------------------------------------------------------------------------
+  //-------------------------------------------------------------------------------------------
+  //----------------------- Calculate Bulk Flow Magnitude & Direction, with errors ------------
+  //-------------------------------------------------------------------------------------------
   
-  vector<double> U(3);
-  U[0] = u[0];
-  U[1] = u[1];
-  U[2] = u[2];
+  double BFmag;
+  
+  BFmag = sqrt(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
   
   //cout << "ux = " << u[0] << ", uy = " << u[1] << ", uz = " << u[2] << endl;
   //cout << "Mag: " << BFmag << endl;  
   
-  //--------------------------------------------------------------------------------------
-  //------------------------------ Calculate Window Function -----------------------------
-  //--------------------------------------------------------------------------------------
-  
   endtime = time (NULL);
   //cout << "Time taken = " << (endtime-starttime)/60. << " minutes" << endl;
-  
   
   
   for (int i=0; i<3; i++)
@@ -703,7 +604,6 @@ vector<double> MV_bulkflow(vector<vector<double> > Data, vector<double> V_err, d
   delete [] vrad;
   delete [] rad;
   delete [] verr;
-  delete [] u;
   
   for (int i = 0; i < ngal; i++) {
     delete [] G_nm[i];
@@ -744,8 +644,8 @@ vector<double> MV_bulkflow(vector<vector<double> > Data, vector<double> V_err, d
     delete [] weight_in[i];
   }
   delete [] weight_in;
-
-  return U;
+  
+  return BFmag;
 }
 
 int main()
@@ -762,40 +662,36 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  int n_cols = 6;
- int n_rows = 45000;
+ int n_rows = 10000;
  
- int n_sub = 500; //Number of galaxies used for each bulk flow calculation
- int n_draw = 150; //Number of bulk flows calculated per rotation
- int n_sub_spher = 1689; //Number of rotations
+ int n_sub = 300; //Number of galaxies used for each bulk flow calculation
+ int n_draw = 100; //Number of bulk flows calculated per rotation
+ int n_sub_spher = 60; //Number of rotations
  
  double sigma_cos2 = 62500.0; // 250*250 Cosmic variance term
  
  //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
- vector<double> Angle(1);
- vector<double> Radius_eff(1);
- //Angle[0] = 1.0; Radius_eff[0] = 50;
- //Angle[0] = 0.75; Radius_eff[0] = 50;
- //Angle[0] = 0.5; Radius_eff[0] = 50;
- //Angle[0] = 0.37; Radius_eff[0] = 50;
- //Angle[0] = 0.25; Radius_eff[0] = 50;
- //Angle[0] = 0.17; Radius_eff[0] = 50;
- //Angle[0] = 0.125; Radius_eff[0] = 50;
- Angle[0] = 0.062; Radius_eff[0] = 50;
+ vector<double> Angle(2);
+ //Angle[0] = 1.0;
+ //Angle[1] = 0.5;
+ Angle[0] = 0.25;
+ Angle[1] = 0.125;
  
+ //Angle[0] = 0.75;
+ //Angle[0] = 0.37;
+ //Angle[0] = 0.17;
  
- //Radius_eff[0] = 50;
- 
+ vector<double> Radius_eff(2);
+ //Radius_eff[0] = 100;
  //Radius_eff[1] = 200;
- 
- //Radius_eff[0] = 300;
- //Radius_eff[1] = 400;
+ Radius_eff[0] = 50;
+ Radius_eff[1] = 50;
  
  //Radius_eff[0] = 150;
  //Radius_eff[0] = 250;
  //Radius_eff[0] = 350;
-
- string ROOT_DIR = "/home/per/Data/";
- //string ROOT_DIR = "/Users/perandersen/Data/";
+ 
+ string ROOT_DIR = "/Users/perandersen/Data/";
  string SUB_DIR = "1";
  // !!!PARAMETERS ARE SET HERE!!!
  
@@ -816,11 +712,7 @@ int main()
  }
  
  vector<double> Verr;
- vector<vector<double> > Bulk_flow(n_draw);
- for (int i=0; i<Bulk_flow.size(); i++)
- {
-   Bulk_flow[i].resize(3);
- }
+ vector<double> Bulk_flow(n_draw);
  
  for (int i = 0; i < 3; i++)
  {
@@ -830,7 +722,7 @@ int main()
  //------------------------------------- Read in CAMB P(k) -------------------------------
  
  //This converts the string to a char
- string pk_fil = ROOT_DIR + "BulkFlow/DataCommon/pk_lambdacamb_std_nonlinear.dat";
+ string pk_fil = ROOT_DIR + "BulkFlow/DataCommon/pk_planck_z0_nonlinear_matterpower.dat";
  char pk_file[pk_fil.size()+1];
  for (int i=0; i<pk_fil.size()+1; i++)
  {
@@ -849,7 +741,7 @@ int main()
  
      //This converts the string to a char
      string i_ideal_read = static_cast<ostringstream*>( &(ostringstream() << Radius_eff[i_angle]) )->str();
-     string ideal_loc = ROOT_DIR + "BulkFlow/DataCommon/mock_ideal_ri" + i_ideal_read + "_n1200.txt";
+     string ideal_loc = ROOT_DIR + "BulkFlow/DataCommon/mock_ideal_ri" + i_ideal_read + "_n1000.txt";
      char idealsurveyfile[ideal_loc.size()+1];
      for (int i=0; i<ideal_loc.size()+1; i++)
      {
@@ -915,7 +807,7 @@ int main()
              Bulk_flow[i_draw] = MV_bulkflow(Hori_sub, Verr, sigma_cos2);
          }
      string i_save = static_cast<ostringstream*>( &(ostringstream() << i_sub) )->str();
-     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MV/MV_Bulk_flows_" + i_angle_read + "_n300_" + i_save + ".txt");
+     save_vector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MV/MV_Bulk_flows_" + i_angle_read + "_" + i_save + ".txt");
      }
  }
  

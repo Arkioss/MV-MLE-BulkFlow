@@ -12,21 +12,21 @@ Last revision: April 2015
 def const_volume():
     #1) Spread out point on range -320,320
 
-    X = rnd.uniform(-1000,1000,100000000)
-    Y = rnd.uniform(-1000,1000,100000000)
-    Z = rnd.uniform(-1000,1000,100000000)
+    X = rnd.uniform(-1000,1000,50000000)
+    Y = rnd.uniform(-1000,1000,50000000)
+    Z = rnd.uniform(-1000,1000,50000000)
 
     #2) Define list of angles and other parameters
 
     #!!! EDIT HERE ONLY !!!
-    #volume = 150e6 # (Mpc/h)^3 This determines radius of each slice
     volume = 40e6 # (Mpc/h)^3 This determines radius of each slice
-    Angle = np.array([np.pi , np.pi/2.0, np.pi/4.0, np.pi/8.0, np.pi/16.0])
+    Angle = np.array([np.pi , np.pi/2.0, np.pi/4.0, np.pi/8.0])
     #Angle = np.array([0.75*np.pi,0.37*np.pi,0.17*np.pi])
-    bins_x, bins_y, bins_z = 150, 150, 150
-    #root_dir = "/Users/perandersen/Data/" #!!! FOR OSX !!!
-    root_dir = "/home/per/Data/" #!!! FOR UBUNTU !!!
-    sub_dir = "1"
+    #Angle = np.array([np.pi/4.])
+    bins_x, bins_y, bins_z = 15, 15, 15
+    root_dir = "/Users/perandersen/Data/"
+    #root_dir = "/home/per/Data/"
+    sub_dir = "8A"
     #!!! EDIT HERE ONLY !!!
 
     #3) Convert to spherical coordinates
@@ -39,7 +39,8 @@ def const_volume():
     for i in np.arange(len(Angle)):
         print "i: ", i
     
-        r_cut = ( 3*volume / (2*np.pi*(1.0-np.cos(Angle[i]))))**(1.0/3.0)
+        #r_cut = 690.
+        r_cut = ( 3*volume / (2*np.pi*(1.0-np.cos(Angle[i]))))**(1./3.)
         print "r: ", r_cut
     
         #Cutting out points beyond wanted radius
@@ -91,10 +92,10 @@ def const_volume():
                     Hist_to_file.append( Hist[j,k,l] )
     
         #Saving results to files
-        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Angle_hist_" + str(np.round(Angle[i] / np.pi,3)) + ".txt",Hist_to_file,fmt = '%.8f')
-        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Angle_hist_" + str(np.round(Angle[i] / np.pi,3)) + "_x.txt",Edges[0],fmt = '%.8f')
-        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Angle_hist_" + str(np.round(Angle[i] / np.pi,3)) + "_y.txt",Edges[1],fmt = '%.8f')
-        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Angle_hist_" + str(np.round(Angle[i] / np.pi,3)) + "_z.txt",Edges[2],fmt = '%.8f')    
+        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Cosmic_hist_" + str(np.round(Angle[i] / np.pi,3)) + ".txt",Hist_to_file,fmt = '%.8f')
+        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Cosmic_hist_" + str(np.round(Angle[i] / np.pi,3)) + "_x.txt",Edges[0],fmt = '%.8f')
+        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Cosmic_hist_" + str(np.round(Angle[i] / np.pi,3)) + "_y.txt",Edges[1],fmt = '%.8f')
+        np.savetxt(root_dir + "BulkFlow/" + sub_dir + "/Histogram/Cosmic_hist_" + str(np.round(Angle[i] / np.pi,3)) + "_z.txt",Edges[2],fmt = '%.8f')    
 
 def shells():
     #1) Spread out point on range -320,320

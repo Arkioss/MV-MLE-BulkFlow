@@ -12,15 +12,14 @@
 #include "perfuncs.h"
 
 /*
- Compile with:
- g++ -o CMLE2 CosmicMLE2.cpp `gsl-config --cflags --libs` -O3
- 
- Use:
- GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
- To set seed and type
- For tcsh syntax: setenv GSL_RNG_SEED "10"
- 
- */
+Compile with:
+g++-5 -o CMLE1 CosmicMLE3.cpp `gsl-config --cflags --libs` -O3
+
+Use:
+GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
+To set seed and type
+For tcsh syntax: setenv GSL_RNG_SEED "10"
+*/
 
 vector<double> MLE_bulkflow(vector<vector<double> > Data, vector<double> V_err,double sigmastar2)
 {
@@ -105,9 +104,9 @@ int main()
  int n_cols = 6;
  int n_rows = 45000;
  
- int n_sub = 1000; //Number of galaxies used for each bulk flow calculation
+ int n_sub = 8000; //Number of galaxies used for each bulk flow calculation
 
- int n_draw = 3; //Number of bulk flows calculated
+ int n_draw = 5; //Number of bulk flows calculated
  int n_rot = 1689; //Number of rotations
  
  double sigma_cos2 = 250.0*250.0; //Cosmic variance term
@@ -165,7 +164,8 @@ for (int i=0; i<Bulk_flow.size(); i++)
          Bulk_flow[i_draw] = MLE_bulkflow(Hori_sub, Verr, sigma_cos2);
      }
      
-     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MLE/MLE_Bulk_flows_1.0_" + i_rot_str + "_1000.txt");
+     string i_n_sub = static_cast<ostringstream*>( &(ostringstream() << n_sub) )->str();
+     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/MLE/MLE_Bulk_flows_1.0_" + i_rot_str + "_" + i_n_sub + ".txt");
  }
  printf("Time taken: %.2fs\n", (double)(clock() - t_start)/CLOCKS_PER_SEC);
 }

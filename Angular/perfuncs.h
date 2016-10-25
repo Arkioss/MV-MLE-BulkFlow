@@ -353,13 +353,13 @@ vector<vector<double> > Rotate(vector<vector<double> > XYZ, double a, double b, 
 //------------------------------------ COSMOLOGY ---------------------------------------
  double e_inv(double z)
 {/*Returns the inverse of E(z) for flat matter lambda cosmology*/
-    double const omega_m = 0.3;
+    double const omega_m = 0.26;
     return pow(omega_m*pow(1+z,3.0)+(1-omega_m),-0.5);
 }
 
 double lum_distance_per_h(double z)
 {/*Returns the luminosity distance of redshift z for E(z) function*/
-    double int_sum=0.0,int_tracker=0.0;
+    double int_sum=0.0, int_tracker=0.0;
     double delta_z = z / 100000.0;
     while (int_tracker + delta_z < z)
     {
@@ -380,8 +380,8 @@ vector<double> Dist_per_h_to_redshift(vector<double> Distance)
     double z_tracker = 0.0;
     
     //Checking that files exist
-    ifstream myfile1("/Users/perandersen/Data/BulkFlow/DataCommon/interp_redshift_h.txt");
-    ifstream myfile2("/Users/perandersen/Data/BulkFlow/DataCommon/interp_lum_dist_h.txt");
+    ifstream myfile1("interp_redshift_h.txt");
+    ifstream myfile2("interp_lum_dist_h.txt");
     if ( (!myfile1) or (!myfile2))
     {
         cout << "File doesn't exist. Calculating and saving new interpolation table..." << endl;
@@ -399,8 +399,8 @@ vector<double> Dist_per_h_to_redshift(vector<double> Distance)
     }
     else
     {
-    Redshift_interp = Read_to_vector("/Users/perandersen/Data/BulkFlow/DataCommon/interp_redshift_h.txt");
-    Lum_dist_interp = Read_to_vector("/Users/perandersen/Data/BulkFlow/DataCommon/interp_lum_dist_h.txt");
+    Redshift_interp = Read_to_vector("interp_redshift_h.txt");
+    Lum_dist_interp = Read_to_vector("interp_lum_dist_h.txt");
     
     if ( abs(Redshift_interp.size() - (z_interp_max/dz)) > 2)
     {

@@ -10,18 +10,16 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include "perfuncs.h"
+
 /*
- Compile with:
- g++-5 -o ASV1 AngularSumVel2.cpp `gsl-config --cflags --libs` -O3
+Compile with:
+g++ -o ASV1 AngularSumVel3.cpp `gsl-config --cflags --libs` -O3
  
- Use:
- GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
- To set seed and type
- For tcsh syntax: setenv GSL_RNG_SEED "10"
- 
+Use:
+GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
+To set seed and type
+For tcsh syntax: setenv GSL_RNG_SEED "10"
  */
- 
-using namespace std;
 
 int main()
 {
@@ -37,31 +35,36 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  int n_cols = 6;
- int n_rows = 100000;
+ int n_rows = 45000;
 
- int n_sub_spher = 1127; //Number of rotations
+ int n_sub_spher = 1689; //Number of rotations
  
  //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
- vector<double> Angle(8);
+ vector<double> Angle(4);
+ 
+ /*
  Angle[0] = 1.0;
  Angle[1] = 0.75;
  Angle[2] = 0.5;
  Angle[3] = 0.37;
- Angle[4] = 0.25;
- Angle[5] = 0.17;
- Angle[6] = 0.125;
- Angle[7] = 0.062;
+ */
+ 
+ Angle[0] = 0.25;
+ Angle[1] = 0.17;
+ Angle[2] = 0.125;
+ Angle[3] = 0.062;
+ 
  
  vector<double> Radius_eff(8);
 
- Radius_eff[0] = 50;
- Radius_eff[1] = 50;
- Radius_eff[2] = 50;
- Radius_eff[3] = 50;
- Radius_eff[4] = 50;
- Radius_eff[5] = 50;
- Radius_eff[6] = 50;
- Radius_eff[7] = 50;
+ Radius_eff[0] = 50.;
+ Radius_eff[1] = 50.;
+ Radius_eff[2] = 50.;
+ Radius_eff[3] = 50.;
+ Radius_eff[4] = 50.;
+ Radius_eff[5] = 50.;
+ Radius_eff[6] = 50.;
+ Radius_eff[7] = 50.;
 
  
  /*
@@ -85,7 +88,8 @@ int main()
  */
  double r_eff; //Only used for gaussian weights
  
- string ROOT_DIR = "/Users/perandersen/Data/";
+ //string ROOT_DIR = "/Users/perandersen/Data/";
+ string ROOT_DIR = "/home/per/Data/";
  string SUB_DIR = "1";
  
  // !!!PARAMETERS ARE SET HERE!!!
@@ -93,17 +97,22 @@ int main()
  //Preparing working ints and vectors
  vector<vector<double> > Hori_xyz(n_rows);
  
- vector<double> Bulk_flow(n_sub_spher);
- 
  double sum_vx = 0.0;
  double sum_vy = 0.0;
  double sum_vz = 0.0;
  
  double radius;
- double vector_factor;
+ double vector_factor = 1.;
  double weight;
- double weight_sum = 0;
+ double weight_sum = 0.;
  
+ vector<vector<double> >Bulk_flow(n_sub_spher);
+ for (int i=0; i<Bulk_flow.size(); i++)
+ {
+   Bulk_flow[i].resize(3);
+ }
+ 
+ vector<double> bulk_flow_holder(3);
  //Beginning main loop
  for (int i_angle=0; i_angle<Angle.size(); i_angle++)
  {
@@ -124,7 +133,6 @@ int main()
        
          Hori_xyz = Read_to_2d_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR + "/Hori_sub_cart_" + i_angle_read + "_" + i_read + ".txt", n_rows, n_cols);
      
-         
          for (int i_xyz=0; i_xyz<Hori_xyz.size(); i_xyz++)
          {
            //Gaussian
@@ -138,27 +146,29 @@ int main()
            weight_sum += weight;
            
            //If we want to use only line-of-sight components
-           vector_factor = (Hori_xyz[i_xyz][0]*Hori_xyz[i_xyz][3] + Hori_xyz[i_xyz][1]*Hori_xyz[i_xyz][4] + Hori_xyz[i_xyz][2]*Hori_xyz[i_xyz][5])
-                         / (Hori_xyz[i_xyz][0]*Hori_xyz[i_xyz][0] + Hori_xyz[i_xyz][1]*Hori_xyz[i_xyz][1] + Hori_xyz[i_xyz][2]*Hori_xyz[i_xyz][2]);
+           //vector_factor = (Hori_xyz[i_xyz][0]*Hori_xyz[i_xyz][3] + Hori_xyz[i_xyz][1]*Hori_xyz[i_xyz][4] + Hori_xyz[i_xyz][2]*Hori_xyz[i_xyz][5])
+           //             / (Hori_xyz[i_xyz][0]*Hori_xyz[i_xyz][0] + Hori_xyz[i_xyz][1]*Hori_xyz[i_xyz][1] + Hori_xyz[i_xyz][2]*Hori_xyz[i_xyz][2]);
                          
            sum_vx += vector_factor * Hori_xyz[i_xyz][3] * weight;
            sum_vy += vector_factor * Hori_xyz[i_xyz][4] * weight;
            sum_vz += vector_factor * Hori_xyz[i_xyz][5] * weight;
            
          }
-         //Gaussian weights
          sum_vx = sum_vx / weight_sum;
          sum_vy = sum_vy / weight_sum;
          sum_vz = sum_vz / weight_sum;
          
-         Bulk_flow[i_sub] = pow(pow(sum_vx,2.0)+pow(sum_vy,2.0)+pow(sum_vz,2.0),0.5);
+         bulk_flow_holder[0] = sum_vx;
+         bulk_flow_holder[1] = sum_vy;
+         bulk_flow_holder[2] = sum_vz;
+         
+         Bulk_flow[i_sub] = bulk_flow_holder;
          sum_vx = 0.0;
          sum_vy = 0.0;
          sum_vz = 0.0;
          weight_sum = 0.0;
      }
-     //save_vector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/Sum/Bulk_flows_sum_" + i_angle_read + ".txt");
-     save_vector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/Sum/Bulk_flows_sum_" + i_angle_read + "_los.txt");
+     save_2dvector_to_file(Bulk_flow,ROOT_DIR + "BulkFlow/" + SUB_DIR + "/Sum/Bulk_flows_sum_" + i_angle_read + ".txt");
  }
  printf("Time taken: %.2fs\n", (double)(clock() - t_start)/CLOCKS_PER_SEC);
 }

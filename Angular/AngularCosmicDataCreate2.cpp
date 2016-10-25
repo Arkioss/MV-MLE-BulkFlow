@@ -17,7 +17,7 @@
  Last revision: June 2015
  
  Compile with:
- g++-4.9 -o ACDC1 AngularCosmicDataCreate2.cpp `gsl-config --cflags --libs` -O3
+ g++ -o ACDC0 AngularCosmicDataCreate2.cpp `gsl-config --cflags --libs` -O3
  
  Use:
  GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
@@ -43,14 +43,14 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  
- int n_want = 100000; //Number of galaxies per rotation 
- int n_rot = 80; //Number of rotations - cannot be higher than number of files/slices
+ int n_want = 50000; //Number of galaxies per rotation 
+ int n_rot = 1690; //Number of rotations - cannot be higher than number of files/slices
  
  //Number of bins for x, y, z axis
  //Critical this is similar to that of Angular_create_histogram2.py parameters!!!
- int size_x = 15;
- int size_y = 15;
- int size_z = 15;
+ int size_x = 150;
+ int size_y = 150;
+ int size_z = 150;
  
  //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
  vector<double> Angle(4);
@@ -64,7 +64,8 @@ int main()
  //Angle[2] = 0.75;
  //Angle[0] = 0.062;
  
- string ROOT_DIR = "/Users/perandersen/Data/";
+ //string ROOT_DIR = "/Users/perandersen/Data/"; // !!! FOR OSX !!!
+ string ROOT_DIR = "/home/per/Data/"; // !!! FOR UBUNTU !!!
  string SUB_DIR = "1";
  
  // !!!PARAMETERS ARE SET HERE!!!
@@ -117,9 +118,9 @@ int main()
      int n_rejected;
  
      //To figure out which bin it fits into
-     double slope_x = 1 / (Hist_edges_x[1]-Hist_edges_x[0]);
-     double slope_y = 1 / (Hist_edges_y[1]-Hist_edges_y[0]);
-     double slope_z = 1 / (Hist_edges_z[1]-Hist_edges_z[0]);
+     double slope_x = 1. / (Hist_edges_x[1]-Hist_edges_x[0]);
+     double slope_y = 1. / (Hist_edges_y[1]-Hist_edges_y[0]);
+     double slope_z = 1. / (Hist_edges_z[1]-Hist_edges_z[0]);
  
      int alpha, beta, gamma;
  

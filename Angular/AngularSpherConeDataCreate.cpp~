@@ -17,7 +17,7 @@
  Last revision: June 2015
  
  Compile with:
- g++-5 -o CDC2 CosmicDataCreate2.cpp `gsl-config --cflags --libs` -O3
+ g++ -o ASCDC1 AngularSpherConeDataCreate.cpp `gsl-config --cflags --libs` -O3
  
  Use:
  GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
@@ -25,8 +25,25 @@
  For tcsh syntax: setenv GSL_RNG_SEED "10" and setenv GSL_RNG_TYPE "mt19937"
  
  */
- 
-using namespace std;
+
+bool is_within_cone(double x, double y, double z, double radius, double theta)
+{
+    bool is_within = true;
+    double radius_test = pow(x*x + y*y + z*z, 0.5);
+    double theta_test = acos(z / radius_test);
+
+    if (radius_test > radius)
+    {
+        is_within = false;
+    }
+
+    if (theta_test > theta)
+    {
+        is_within = false;
+    }
+
+    return is_within;
+}
 
 int main()
 {
@@ -43,34 +60,41 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  
- int n_want = 120000; //Number of galaxies per rotation 
- int n_rot = 80; //Number of rotations - cannot be higher than number of files/slices
+ int n_want = 45000; //Number of galaxies per rotation 
+ int n_rot = 1689; //Number of rotations - cannot be higher than number of files/slices
  
- //Number of bins for x, y, z axis
- //Critical this is similar to that of Angular_create_histogram2.py parameters!!!
- int size_x = 15;
- int size_y = 15;
- int size_z = 15;
+ vector<double> Angle(4);
+ vector<double> Radius_limit(4);
  
- //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
- vector<double> Angle(1);
- //Angle[0] = 1.;
- //Angle[0] = 0.5;
- //Angle[0] = 0.25;
- Angle[0] = 0.125;
+ 
+ Angle[0] = 1.0; Radius_limit[0] = 210.;
+ Angle[1] = 0.5; Radius_limit[1] = 267.;
+ Angle[2] = 0.25; Radius_limit[2] = 402.;
+ Angle[3] = 0.125; Radius_limit[3] = 631.;
+ 
+ /*
+ Angle[0] = 0.17; Radius_limit[0] = 516.;
+ Angle[1] = 0.37; Radius_limit[1] = 316.;
+ Angle[2] = 0.75; Radius_limit[2] = 224.;
+ Angle[3] = 0.062; Radius_limit[3] = 1000.;
+ */
 
- 
- string ROOT_DIR = "/Users/perandersen/Data/";
- string SUB_DIR = "8A";
- 
+ //string ROOT_DIR = "/Users/perandersen/Data/"; // !!! FOR OSX !!!
+ string ROOT_DIR = "/home/per/Data/"; // !!! FOR UBUNTU !!!
+ string SUB_DIR = "1";
+
  // !!!PARAMETERS ARE SET HERE!!!
  
+ double opening_angle;
+ double radius_limit;
  //---------------------------------------------------------------------------------
  //-------------------------------- READING DATA -----------------------------------
  //---------------------------------------------------------------------------------
  
  for (int i_angle=0; i_angle<Angle.size(); i_angle++)
  {
+     opening_angle = Angle[i_angle] * 3.1415926535;
+     radius_limit = Radius_limit[i_angle];
      string i_angle_read = static_cast<ostringstream*>( &(ostringstream() << Angle[i_angle]) )->str();
      cout << "Reading data..." << endl << endl;
      
@@ -79,15 +103,10 @@ int main()
      int value = atoi(i_angle_read.c_str());
      if (value == 1)
      {
-       i_angle_read = "1.0";
+         i_angle_read = "1.0";
      }
      
      cout << "Angle: " << i_angle_read << endl;
-     //Reading PTF histogram data
-     vector<double> Hist_density = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + ".txt");
-     vector<double> Hist_edges_x = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + "_x.txt");
-     vector<double> Hist_edges_y = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + "_y.txt");
-     vector<double> Hist_edges_z = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + "_z.txt");
      
      //Preparing reading of HorizonRun data 
      vector<int> N_rows_hori;
@@ -111,14 +130,7 @@ int main()
      int n_guess;
      int n_accepted;
      int n_rejected;
- 
-     //To figure out which bin it fits into
-     double slope_x = 1 / (Hist_edges_x[1]-Hist_edges_x[0]);
-     double slope_y = 1 / (Hist_edges_y[1]-Hist_edges_y[0]);
-     double slope_z = 1 / (Hist_edges_z[1]-Hist_edges_z[0]);
- 
-     int alpha, beta, gamma;
- 
+     bool is_within;
      for (int i_rot=0; i_rot<n_rot; i_rot++)
      {
          /*Horizon_run.resize(N_rows_hori[i_rot]);
@@ -127,19 +139,10 @@ int main()
            Horizon_run[i].resize(n_cols_hori);
          }*/
          
-         cout << "Reading HoriRun with " << N_rows_hori[i_rot] << " rows" << endl;
-         
          string i_read = static_cast<ostringstream*>( &(ostringstream() << i_rot) )->str();
+         cout << "Reading HoriRun with " << N_rows_hori[i_rot] << " rows" << endl;
          Horizon_run = Read_to_2d_vector(ROOT_DIR + "BulkFlow/DataCommon/Hori1000_angle_" + i_read + ".dat", N_rows_hori[i_rot], n_cols_hori);
-         
          cout << "n: " << i_rot << endl;
-         
-         //Get random angles and rotate Hori data accordinly
-         alpha = gsl_rng_uniform(r) * 6.283185307;
-         beta = gsl_rng_uniform(r) * 6.283185307;
-         gamma = gsl_rng_uniform(r) * 6.283185307;
-         
-         Horizon_run = Rotate(Horizon_run,alpha,beta,gamma);
          
          //Cleanup and prepare for next rotation
          Indices.clear();
@@ -190,53 +193,32 @@ int main()
                }
              }
              */
-       
-             //Used to match index to probability from 3d PDF
-             //!!!Make sure to check constant added 1000!!!
-             int i_x = floor(slope_x*(Horizon_run[i_hori][0]+1000.0));
-             int i_y = floor(slope_y*(Horizon_run[i_hori][1]+1000.0));
-             int i_z = floor(slope_z*(Horizon_run[i_hori][2]+1000.0));
-         
-             int i_box = i_z + size_z*i_y + size_z*size_y * i_x;
-         
-             if (Hist_density[i_box] == 0.0)
+             is_within = is_within_cone(Horizon_run[i_hori][0], Horizon_run[i_hori][1], Horizon_run[i_hori][2], radius_limit, opening_angle);
+             if (is_within)
              {
-               i_accept -= 1;
-               n_rejected += 1;
-               if (i_box >= (size_x*size_y*size_z))
-               {
-                 //SANITY CHECK - SHOULD NOT HAVE INDEX OUTSIDE THIS RANGE
-                 cout << "!!! Index outside range !!! i: " << i_box << " p: " << Hist_density[i_box] << endl;
-                 exit(EXIT_FAILURE);
-               }
-               Indices[i_indices] = Indices[Indices.size()-1];
-               Indices.pop_back();
-               continue;
-             }
-   
-             //Rolling the dice to see if the selected point is accepted or rejected
-             double u = gsl_rng_uniform (r);
-             if ( u < Hist_density[i_box])
-             {
-               //The point was accepted! We add the index to our list of accepted indices
-               Accepted[i_accept] = i_hori;
+                //The point was accepted! We add the index to our list of accepted indices
+                Accepted[i_accept] = i_hori;
                
-               //In the list of candidates we copy the end to the current address, then
-               //pop the back. This removes the possibility of using the same index twice.
-               Indices[i_indices] = Indices[Indices.size()-1];
-               Indices.pop_back();
-               
-               //Finally we track the number of accepted points and print the progress!
-               n_accepted += 1;
-               if (i_accept % 5000 == 0)
-               {
-                 cout << "i: " << i_accept << " " << Indices.size() << " Candidates left" << endl;
-               }
+                //In the list of candidates we copy the end to the current address, then
+                //pop the back. This removes the possibility of using the same index twice.
+                Indices[i_indices] = Indices[Indices.size()-1];
+                Indices.pop_back();
+                
+                //Finally we track the number of accepted points and print the progress!
+                n_accepted += 1;
+                if (i_accept % 5000 == 0)
+                {
+                    cout << "i: " << i_accept << " " << Indices.size() << " Candidates left" << endl;
+                }
+
              }
              else
              {
-               //The point was not accepted! We reset and try again!
                i_accept -= 1;
+               n_rejected += 1;
+               Indices[i_indices] = Indices[Indices.size()-1];
+               Indices.pop_back();
+               continue; 
              }
          }
          //Done finding indices for our sample - we now copy the actual data to DataOut

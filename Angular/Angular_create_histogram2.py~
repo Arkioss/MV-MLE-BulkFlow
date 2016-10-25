@@ -21,8 +21,8 @@ def const_volume():
     #!!! EDIT HERE ONLY !!!
     #volume = 150e6 # (Mpc/h)^3 This determines radius of each slice
     volume = 40e6 # (Mpc/h)^3 This determines radius of each slice
-    Angle = np.array([np.pi , np.pi/2.0, np.pi/4.0, np.pi/8.0, np.pi/16.0])
-    #Angle = np.array([0.75*np.pi,0.37*np.pi,0.17*np.pi])
+    #Angle = np.array([np.pi , np.pi/2.0, np.pi/4.0, np.pi/8.0, np.pi/16.0])
+    Angle = np.array([0.75*np.pi,0.37*np.pi,0.17*np.pi])
     bins_x, bins_y, bins_z = 150, 150, 150
     #root_dir = "/Users/perandersen/Data/" #!!! FOR OSX !!!
     root_dir = "/home/per/Data/" #!!! FOR UBUNTU !!!

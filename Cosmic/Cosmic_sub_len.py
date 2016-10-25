@@ -4,15 +4,14 @@ import numpy as np
 '''
 Author: Per Andersen, Dark Cosmology Centre
 Email: perandersen@dark-cosmology.dk
-Last revision: April 2016
+Last revision: April 2015
 
 '''
 
 #Number of datasets to find length for. Look at /Users/perandersen/Data/DataCosmic/ . 
-n = 10
-
-root_dir = "/Users/perandersen/Data/" # !!! FOR OSX !!!
-#root_dir = "/home/per/Data/" # !!! FOR UBUNTU !!!
+n = 100
+root_dir = "/Users/perandersen/Data/"
+#root_dir = "/home/per/Data/"
 
 #Reading datasets, getting length and appending to list
 Len = []
@@ -22,8 +21,7 @@ for i in np.arange(n):
  print "i: ", i
  Data = np.genfromtxt(root_dir + "BulkFlow/DataCommon/Hori1000_angle_" + str(i) + ".dat")
  Len.append(len(Data))
- np.savetxt(root_dir + "BulkFlow/DataCommon/Hori_len.txt",Len,fmt=("%6d"))
 
 #Writing list to file
 print np.min(Len), np.max(Len) #Output to check file was properly read
-
+np.savetxt(root_dir + "BulkFlow/DataCommon/Hori_len.txt",Len,fmt=("%6d"))

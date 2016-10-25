@@ -4,15 +4,15 @@ import numpy as np
 '''
 Author: Per Andersen, Dark Cosmology Centre
 Email: perandersen@dark-cosmology.dk
-Last revision: April 2016
+Last revision: April 2015
 
 '''
 
 #Number of datasets to find length for. Look at /Users/perandersen/Data/DataCosmic/ . 
-n = 10
+n = 1690
 
-root_dir = "/Users/perandersen/Data/" # !!! FOR OSX !!!
-#root_dir = "/home/per/Data/" # !!! FOR UBUNTU !!!
+#root_dir = "/Users/perandersen/Data/" # !!! FOR OSX !!!
+root_dir = "/home/per/Data/" # !!! FOR UBUNTU !!!
 
 #Reading datasets, getting length and appending to list
 Len = []

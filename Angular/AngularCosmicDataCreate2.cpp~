@@ -17,7 +17,7 @@
  Last revision: June 2015
  
  Compile with:
- g++-5 -o CDC2 CosmicDataCreate2.cpp `gsl-config --cflags --libs` -O3
+ g++ -o ACDC0 AngularCosmicDataCreate2.cpp `gsl-config --cflags --libs` -O3
  
  Use:
  GSL_RNG_SEED=10 GSL_RNG_TYPE=mt19937
@@ -43,25 +43,30 @@ int main()
  
  // !!!PARAMETERS ARE SET HERE!!!
  
- int n_want = 120000; //Number of galaxies per rotation 
- int n_rot = 80; //Number of rotations - cannot be higher than number of files/slices
+ int n_want = 50000; //Number of galaxies per rotation 
+ int n_rot = 1690; //Number of rotations - cannot be higher than number of files/slices
  
  //Number of bins for x, y, z axis
  //Critical this is similar to that of Angular_create_histogram2.py parameters!!!
- int size_x = 15;
- int size_y = 15;
- int size_z = 15;
+ int size_x = 150;
+ int size_y = 150;
+ int size_z = 150;
  
  //Set angles from Angular_create_histogram2.py here in units of Pi. Also critical!!!
- vector<double> Angle(1);
- //Angle[0] = 1.;
- //Angle[0] = 0.5;
- //Angle[0] = 0.25;
- Angle[0] = 0.125;
-
+ vector<double> Angle(4);
+ //Angle[0] = 1.0;
+ //Angle[1] = 0.5;
+ //Angle[2] = 0.25;
+ //Angle[3] = 0.125;
  
- string ROOT_DIR = "/Users/perandersen/Data/";
- string SUB_DIR = "8A";
+ Angle[3] = 0.17;
+ Angle[1] = 0.37;
+ Angle[2] = 0.75;
+ Angle[0] = 0.062;
+ 
+ //string ROOT_DIR = "/Users/perandersen/Data/"; // !!! FOR OSX !!!
+ string ROOT_DIR = "/home/per/Data/"; // !!! FOR UBUNTU !!!
+ string SUB_DIR = "1";
  
  // !!!PARAMETERS ARE SET HERE!!!
  
@@ -84,10 +89,10 @@ int main()
      
      cout << "Angle: " << i_angle_read << endl;
      //Reading PTF histogram data
-     vector<double> Hist_density = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + ".txt");
-     vector<double> Hist_edges_x = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + "_x.txt");
-     vector<double> Hist_edges_y = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + "_y.txt");
-     vector<double> Hist_edges_z = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Cosmic_hist_" + i_angle_read + "_z.txt");
+     vector<double> Hist_density = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Angle_hist_" + i_angle_read + ".txt");
+     vector<double> Hist_edges_x = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Angle_hist_" + i_angle_read + "_x.txt");
+     vector<double> Hist_edges_y = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Angle_hist_" + i_angle_read + "_y.txt");
+     vector<double> Hist_edges_z = Read_to_vector(ROOT_DIR + "BulkFlow/" + SUB_DIR+ "/Histogram/Angle_hist_" + i_angle_read + "_z.txt");
      
      //Preparing reading of HorizonRun data 
      vector<int> N_rows_hori;
@@ -127,11 +132,9 @@ int main()
            Horizon_run[i].resize(n_cols_hori);
          }*/
          
-         cout << "Reading HoriRun with " << N_rows_hori[i_rot] << " rows" << endl;
-         
          string i_read = static_cast<ostringstream*>( &(ostringstream() << i_rot) )->str();
+         cout << "Reading HoriRun with " << N_rows_hori[i_rot] << " rows" << endl;
          Horizon_run = Read_to_2d_vector(ROOT_DIR + "BulkFlow/DataCommon/Hori1000_angle_" + i_read + ".dat", N_rows_hori[i_rot], n_cols_hori);
-         
          cout << "n: " << i_rot << endl;
          
          //Get random angles and rotate Hori data accordinly
